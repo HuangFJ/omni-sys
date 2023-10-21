@@ -29,7 +29,7 @@ pub struct OmniTx {
 #[serde(rename_all = "camelCase")]
 pub struct PrevOut {
     pub script_pub_key: String,
-    pub value: String,
+    pub value: i64,
 }
 
 #[derive(Serialize, Debug)]

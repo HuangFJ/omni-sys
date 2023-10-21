@@ -30,7 +30,7 @@ make -j8
 
 #### step 3, make omni-sys libs
 ```bash
-make out # src/omni.out (execution program)
+make test # src/test.out (test execution program)
 make lib # src/libomni.a (static library)
 make clean # clean omni-sys build
 ```
@@ -44,5 +44,5 @@ cargo build
 
 ### test
 ```bash
-cargo test
+cargo test -- --nocapture
 ```

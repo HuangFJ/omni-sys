@@ -36,7 +36,7 @@ fn main() -> miette::Result<()> {
         ]));
     exec!(Command::new("make")
         .current_dir(&workspace.join("omnicore"))
-        .arg("-j4"));
+        .arg("-j8"));
 
     let mut build = autocxx_build::Builder::new(
         &src.join("lib.rs"),
@@ -109,6 +109,6 @@ fn main() -> miette::Result<()> {
     println!("cargo:rustc-link-arg=-lcpp-httplib");
     println!("cargo:rustc-link-arg=-lm");
 
-    // println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src/lib.rs");
     Ok(())
 }

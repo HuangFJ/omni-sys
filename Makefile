@@ -67,6 +67,7 @@ LIBS += -Wl,--end-group
 
 objects:
 	$(CXX) -c $(DYNAMIC) $(INCLUDE) src/omni.cpp -o src/omni.o
+	$(CXX) -c $(DYNAMIC) $(INCLUDE) src/test.cpp -o src/test.o
 
 lib: objects
 	mkdir -p src/.libs
@@ -76,8 +77,8 @@ lib: objects
 	done
 	ar rcs src/libomni.a src/omni.o src/.libs/*.o
 
-out: objects
-	$(CXX) $(DYNAMIC) $(INCLUDE) $(LIBDIR) src/omni.o $(LIBS) -o src/omni.out
+test: objects
+	$(CXX) $(DYNAMIC) $(INCLUDE) $(LIBDIR) src/test.o src/omni.o $(LIBS) -o src/test.out
 
 clean:
-	rm -rf src/*.o src/*.a src/omni.out src/.libs
+	rm -rf src/*.o src/*.a src/*.out src/.libs

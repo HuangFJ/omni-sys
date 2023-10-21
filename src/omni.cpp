@@ -1,9 +1,8 @@
 #include "omni.h"
-#include <consensus/amount.h>
-#include <univalue.h>
 #include <assert.h>
 #include <chainparams.h>
 #include <coins.h>
+#include <consensus/amount.h>
 #include <core_io.h>
 #include <key_io.h>
 #include <omnicore/dex.h>
@@ -24,6 +23,7 @@
 #include <sync.h>
 #include <tinyformat.h>
 #include <uint256.h>
+#include <univalue.h>
 #include <unordered_map>
 #include <util/strencodings.h>
 #include <util/time.h>
@@ -164,9 +164,12 @@ static bool fillTxInputCache(const CTransaction& tx, std::string vins_json)
         const UniValue& vin_obj = *it;
         Coin newcoin;
         const COutPoint vin(uint256S(vin_obj["txid"].get_str()), vin_obj["vout"].getInt<uint32_t>());
-        const UniValue prevout_obj = vin_obj["prevout"];
-        newcoin.out.scriptPubKey = ParseScript(prevout_obj["scriptPubKey"].get_str());
-        const CAmount nValue(prevout_obj["value"].getInt<int64_t>());
+
+        auto pks_data = ParseHexUV(vin_obj["prevout"]["scriptPubKey"], "scriptPubKey");
+        CScript scriptPubKey(pks_data.begin(), pks_data.end());
+        newcoin.out.scriptPubKey = scriptPubKey;
+
+        const CAmount nValue(vin_obj["prevout"]["value"].getInt<int64_t>());
         newcoin.out.nValue = nValue;
 
         view.AddCoin(vin, std::move(newcoin), true);
