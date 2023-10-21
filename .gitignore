@@ -1,0 +1,13 @@
+/target
+.env
+omnidata
+.idea
+Cargo.lock
+*.out
+*.a
+*.o
+*.lo
+*.exe
+.cache
+*.dSYM
+.libs

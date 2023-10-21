@@ -1,0 +1,20 @@
+[package]
+name = "omni-sys"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+build = "build.rs"
+
+[dependencies]
+autocxx = "0.26"
+cxx = "1.0"
+serde = "1.0"
+serde_json = "*"
+anyhow = "*"
+
+[build-dependencies]
+autocxx-build = "0.26"
+miette = { version = "5", features = ["fancy"] }
+regex = "*"
