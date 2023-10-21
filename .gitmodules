@@ -1,0 +1,4 @@
+[submodule "omnicore"]
+	path = omnicore
+	url = https://github.com/omnilayer/omnicore
+	branch = develop

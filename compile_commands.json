@@ -8,18 +8,18 @@
       "-Wall",
       "-c",
       "-DHAVE_CONFIG_H",
-      "-I/workspaces/web3-indexer/omni-sys/omnicore/src",
-      "-I/workspaces/web3-indexer/omni-sys/omnicore/src/config",
-      "-I/workspaces/web3-indexer/omni-sys/omnicore/src/leveldb/include",
-      "-I/workspaces/web3-indexer/omni-sys/omnicore/src/univalue/include",
-      "-I/workspaces/web3-indexer/omni-sys/omnicore/src/secp256k1/include",
-      "-I/workspaces/web3-indexer/omni-sys/omnicore/src/crc32c/include",
+      "-I/workspaces/omni-sys/omnicore/src",
+      "-I/workspaces/omni-sys/omnicore/src/config",
+      "-I/workspaces/omni-sys/omnicore/src/leveldb/include",
+      "-I/workspaces/omni-sys/omnicore/src/univalue/include",
+      "-I/workspaces/omni-sys/omnicore/src/secp256k1/include",
+      "-I/workspaces/omni-sys/omnicore/src/crc32c/include",
       "-o",
       "src/omni.o",
       "src/omni.cpp"
     ],
-    "directory": "/workspaces/web3-indexer/omni-sys",
-    "file": "/workspaces/web3-indexer/omni-sys/src/omni.cpp",
-    "output": "/workspaces/web3-indexer/omni-sys/src/omni.o"
+    "directory": "/workspaces/omni-sys",
+    "file": "/workspaces/omni-sys/src/omni.cpp",
+    "output": "/workspaces/omni-sys/src/omni.o"
   }
 ]

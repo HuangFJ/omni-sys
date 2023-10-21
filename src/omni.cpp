@@ -1,6 +1,6 @@
 #include "omni.h"
-#include "consensus/amount.h"
-#include "univalue.h"
+#include <consensus/amount.h>
+#include <univalue.h>
 #include <assert.h>
 #include <chainparams.h>
 #include <coins.h>
