@@ -19,6 +19,7 @@ fn main() -> miette::Result<()> {
     let omnicore = workspace.join("omnicore").join("src");
     let cxx = PathBuf::from("/usr/bin/clang++");
 
+    exec!(Command::new("git").args(["submodule", "update", "--init", "--recursive"]));
     exec!(Command::new("./autogen.sh").current_dir(&workspace.join("omnicore")));
     exec!(Command::new("./configure")
         .current_dir(&workspace.join("omnicore"))
