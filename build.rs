@@ -1,5 +1,5 @@
 use regex::Regex;
-use std::env;
+use std::{env, fs};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -38,6 +38,49 @@ fn main() -> miette::Result<()> {
     exec!(Command::new("make")
         .current_dir(&workspace.join("omnicore"))
         .arg("-j8"));
+
+    // tell dependent crates where to find the native omnicore library
+    let mut libs=vec![];
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    for entry in glob::glob("omnicore/**/*.a").unwrap() {
+        let entry = entry.unwrap();
+        fs::copy(entry.clone(), out_dir.join(entry.file_name().unwrap())).unwrap();
+        if entry.to_string_lossy().ends_with("bitcoin_crypto_x86_shani.a") {
+            libs = vec![
+                "bitcoin_node",
+                "bitcoin_common",
+                "bitcoin_util",
+                "univalue",
+                "bitcoin_consensus",
+                "bitcoin_crypto_base",
+                "bitcoin_crypto_sse41",
+                "bitcoin_crypto_avx2",
+                "bitcoin_crypto_x86_shani",
+                "leveldb",
+                "crc32c",
+                "crc32c_sse42",
+                "memenv",
+                "secp256k1",
+            ]
+        }else if entry.to_string_lossy().ends_with("bitcoin_crypto_arm_shani.a") {
+            libs = vec![
+                "bitcoin_node",
+                "bitcoin_common",
+                "bitcoin_util",
+                "univalue",
+                "bitcoin_consensus",
+                "bitcoin_crypto_base",
+                "bitcoin_crypto_arm_shani",
+                "leveldb",
+                "crc32c",
+                "crc32c_arm_crc",
+                "memenv",
+                "secp256k1",
+            ];
+        }
+    }
+    println!("cargo:root={}", out_dir.to_string_lossy());
+    println!("cargo:libs={}", libs.join(" "));
 
     let mut build = autocxx_build::Builder::new(
         &src.join("lib.rs"),

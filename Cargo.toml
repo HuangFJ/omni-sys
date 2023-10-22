@@ -6,11 +6,12 @@ authors = ["Jon Huang <biohfj@gmail.com>"]
 exclude = [
     "omnicore"
 ]
-description = "a rust binding of omnilayer"
+description = "rust binding to omnilayer"
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+links = "omnicore"
 build = "build.rs"
 
 [dependencies]
@@ -24,3 +25,4 @@ anyhow = "1.0"
 autocxx-build = "0.26"
 miette = { version = "5", features = ["fancy"] }
 regex = "1.10"
+glob = "0.3"
