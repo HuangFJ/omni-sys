@@ -44,7 +44,7 @@ fn main() -> miette::Result<()> {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     for entry in glob::glob("omnicore/**/*.a").unwrap() {
         let entry = entry.unwrap();
-        fs::copy(entry.clone(), out_dir.join(entry.file_name().unwrap())).unwrap();
+        // fs::copy(entry.clone(), out_dir.join(entry.file_name().unwrap())).unwrap();
         if entry.to_string_lossy().ends_with("bitcoin_crypto_x86_shani.a") {
             libs = vec![
                 "bitcoin_node",
