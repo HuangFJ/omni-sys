@@ -15,55 +15,68 @@ INCLUDE = -I$(PWD)/omnicore/src \
 	-I$(PWD)/jsonrpccxx
 
 LIBDIR = -L$(PWD)/omnicore/src \
-	-L$(PWD)/omnicore/src/leveldb/.libs \
+	-L$(PWD)/omnicore/src/.libs \
 	-L$(PWD)/omnicore/src/crypto/.libs \
+	-L$(PWD)/omnicore/src/leveldb/.libs \
 	-L$(PWD)/omnicore/src/crc32c/.libs \
-	-L$(PWD)/omnicore/src/secp256k1/.libs \
-	-L$(PWD)/omnicore/src/.libs
-
-LIBS = -lcpp-httplib \
-	-Wl,--start-group \
-	-lbitcoin_node \
-	-lbitcoin_consensus \
-	-lbitcoin_util \
-	-lbitcoin_common \
-	-lbitcoin_crypto_base \
-	-lleveldb \
-	-lmemenv \
-	-lcrc32c \
-	-lsecp256k1 \
-	-lunivalue
-
-LIBS_a = $(PWD)/omnicore/src/leveldb/.libs/libleveldb.a \
-	$(PWD)/omnicore/src/leveldb/.libs/libmemenv.a \
-	$(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_base.a \
-	$(PWD)/omnicore/src/crc32c/.libs/libcrc32c.a \
-	$(PWD)/omnicore/src/libbitcoin_common.a \
-	$(PWD)/omnicore/src/libbitcoin_util.a \
-	$(PWD)/omnicore/src/secp256k1/.libs/libsecp256k1.a \
-	$(PWD)/omnicore/src/libbitcoin_consensus.a \
-	$(PWD)/omnicore/src/libbitcoin_node.a \
-	$(PWD)/omnicore/src/.libs/libunivalue.a
+	-L$(PWD)/omnicore/src/secp256k1/.libs
+	
 
 ifneq ($(filter arm% aarch64,$(UNAME_P)),)
-	LIBS_a += $(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_arm_shani.a \
+	LIBBITCOIN_CRYPTO_a = $(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_base.a \
+		$(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_arm_shani.a
+
+	LIBCRC32C_a = $(PWD)/omnicore/src/crc32c/.libs/libcrc32c.a \
 		$(PWD)/omnicore/src/crc32c/.libs/libcrc32c_arm_crc.a
-	LIBS += -lbitcoin_crypto_arm_shani \
+
+	LIBBITCOIN_CRYPTO = -lbitcoin_crypto_base \
+		-lbitcoin_crypto_arm_shani
+
+	LIBCRC32C = -lcrc32c \
 		-lcrc32c_arm_crc
 endif
 
 ifneq ($(filter x86_64,$(UNAME_P)),)
-	LIBS_a += $(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_x86_shani.a \
-		$(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_avx2.a \
+	LIBBITCOIN_CRYPTO_a = $(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_base.a \
 		$(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_sse41.a \
+		$(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_avx2.a \
+		$(PWD)/omnicore/src/crypto/.libs/libbitcoin_crypto_x86_shani.a
+
+	LIBCRC32C_a = $(PWD)/omnicore/src/crc32c/.libs/libcrc32c.a \
 		$(PWD)/omnicore/src/crc32c/.libs/libcrc32c_sse42.a
-	LIBS += -lbitcoin_crypto_x86_shani \
-		-lbitcoin_crypto_avx2 \
+
+	LIBBITCOIN_CRYPTO = -lbitcoin_crypto_base \
 		-lbitcoin_crypto_sse41 \
+		-lbitcoin_crypto_avx2 \
+		-lbitcoin_crypto_x86_shani
+
+	LIBCRC32C =	-lcrc32c \
 		-lcrc32c_sse42
 endif
 
-LIBS += -Wl,--end-group
+LIBS = -lbitcoin_node \
+	-lbitcoin_common \
+	-lbitcoin_util \
+	-lunivalue \
+	-lbitcoin_consensus \
+	$(LIBBITCOIN_CRYPTO) \
+	-lleveldb \
+	$(LIBCRC32C) \
+	-lmemenv \
+	-lsecp256k1
+
+LIBS_a = $(PWD)/omnicore/src/libbitcoin_node.a \
+	$(PWD)/omnicore/src/libbitcoin_common.a \
+	$(PWD)/omnicore/src/libbitcoin_util.a \
+	$(PWD)/omnicore/src/.libs/libunivalue.a \
+	$(PWD)/omnicore/src/libbitcoin_consensus.a \
+	$(LIBBITCOIN_CRYPTO_a) \
+	$(PWD)/omnicore/src/leveldb/.libs/libleveldb.a \
+	$(LIBCRC32C_a) \
+	$(PWD)/omnicore/src/leveldb/.libs/libmemenv.a \
+	$(PWD)/omnicore/src/secp256k1/.libs/libsecp256k1.a
+
+# LIBS += -lcpp-httplib
 
 objects:
 	$(CXX) -c $(DYNAMIC) $(INCLUDE) src/omni.cpp -o src/omni.o
