@@ -61,6 +61,7 @@ fn main() -> miette::Result<()> {
                 "crc32c_sse42",
                 "memenv",
                 "secp256k1",
+                "m",
             ]
         }else if entry.to_string_lossy().ends_with("bitcoin_crypto_arm_shani.a") {
             libs = vec![
@@ -76,6 +77,7 @@ fn main() -> miette::Result<()> {
                 "crc32c_arm_crc",
                 "memenv",
                 "secp256k1",
+                "m",
             ];
         }
     }
