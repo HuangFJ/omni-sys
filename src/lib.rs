@@ -10,8 +10,6 @@ include_cpp! {
     generate!("ParseTx")
 }
 
-pub struct OmniLayer;
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OmniTx {
     pub txid: String,
@@ -25,35 +23,49 @@ pub struct OmniTx {
     pub propertyid: i32,
 }
 
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct PrevOut {
-    pub script_pub_key: String,
-    pub value: i64,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RawTx {
+    pub txid: String,
+    pub height: i32,
+    pub hex: String,
+    pub vin: Vec<Vin>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Vin {
     pub txid: String,
     pub vout: i32,
     pub prevout: PrevOut,
 }
 
-impl OmniLayer {
-    pub fn new(host: &str, port: i32, username: &str, password: &str) -> Self {
-        ffi::Init(host, c_int(port), username, password);
-        Self
-    }
-    pub fn dfault() -> Self {
-        ffi::Init("127.0.0.1", c_int(8332), "", "");
-        Self
-    }
-    pub fn parse_tx(&self, tx_hex: &str, block_height: i32, vins: Vec<Vin>) -> Result<OmniTx> {
-        let result = ffi::ParseTx(tx_hex, c_int(block_height), serde_json::to_string(&vins)?);
-        if result.is_null() {
-            return Err(anyhow::anyhow!("ParseTx failed"));
-        }
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PrevOut {
+    pub value: i64,
+    pub script_pub_key: ScriptPubKey,
+}
 
-        Ok(serde_json::from_str(result.to_str()?)?)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ScriptPubKey {
+    pub hex: String,
+}
+
+pub fn init_with(host: &str, port: i32, username: &str, password: &str) {
+    ffi::Init(host, c_int(port), username, password);
+}
+
+pub fn init() {
+    ffi::Init("127.0.0.1", c_int(8332), "", "");
+}
+
+pub fn parse_tx(tx: &RawTx) -> Result<OmniTx> {
+    let result = ffi::ParseTx(serde_json::to_string(tx)?);
+    if result.is_null() {
+        return Err(anyhow::anyhow!("invalid omni tx"));
+    }
+    if let Some(omni_tx) = serde_json::from_str::<Option<OmniTx>>(result.to_str()?)? {
+        Ok(omni_tx)
+    } else {
+        Err(anyhow::anyhow!("invalid omni tx"))
     }
 }

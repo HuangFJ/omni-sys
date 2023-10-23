@@ -4,19 +4,17 @@
 int main(int argc, char const* argv[])
 {
 #ifdef FETCH_REMOTE_TX
-    Init(argv[3], std::stoi(argv[4]), argv[5], argv[6]);
+    Init(argv[2], std::stoi(argv[3]), argv[4], argv[5]);
     std::string rawTx = argv[1];
-    int blockHeight = std::stoi(argv[2]);
 
-    auto ret = ParseTx(rawTx, blockHeight);
+    auto ret = ParseTx(rawTx);
     tfm::printfln("%s", ret);
-#endif
+#else
     Init();
     std::string rawTx = argv[1];
-    int blockHeight = std::stoi(argv[2]);
-    std::string vinsJson = argv[3];
-    auto ret = ParseTx(rawTx, blockHeight, vinsJson);
+    auto ret = ParseTx(rawTx);
     tfm::printfln("%s", ret);
 
     return 0;
+#endif
 }

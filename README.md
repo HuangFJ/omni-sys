@@ -7,10 +7,12 @@ open project in vscode and launch devcontainer.
 apt install build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 clang bear ccache git
 # dependency libraries
 apt install libevent-dev libboost-dev nlohmann-json3-dev libcpp-httplib-dev
+cargo install armerge
 ```
 #### macos
 ```bash
 brew install automake libtool boost pkg-config libevent nlohmann-json cpp-httplib bear ccache
+cargo install armerge
 ```
 
 ## build

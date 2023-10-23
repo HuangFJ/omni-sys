@@ -10,7 +10,7 @@ else ifeq ($(UNAME), Darwin)
 	AR = libtool -static -o
 endif
 
-# AR = armerge -o 
+AR = armerge -o 
 
 DYNAMIC = -DHAVE_CONFIG_H \
 	# -DFETCH_REMOTE_TX
@@ -102,8 +102,11 @@ objects:
 # test: objects
 # 	$(CXX) $(DYNAMIC) $(INCLUDE) $(LIBDIR) src/test.o src/omni.o $(LIBS) -o src/test.out
 
-test: objects
+lib: objects
+	rm -f src/libomnicore.a
 	$(AR) src/libomnicore.a $(LIBS_a)
+
+test: lib
 	$(CXX) src/test.o src/omni.o src/libomnicore.a -o src/test.out
 
 clean:

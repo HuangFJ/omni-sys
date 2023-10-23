@@ -66,12 +66,10 @@ public:
             if (res->status == 200) {
                 return res->body;
             }
-            tfm::printfln("json rpc error: %s", res->status);
+            return tfm::format("{\"error\": \"response code: %s \"}", res->status);
         } else {
-            auto err = res.error();
-            tfm::printfln("json rpc error: %s", httplib::to_string(err));
+            return tfm::format("{\"error\": \"unknown error: %s \"}", httplib::to_string(res.error()));
         }
-        return "{}";
     }
 };
 
@@ -94,7 +92,7 @@ bool fetchTransaction(const uint256& hash, CMutableTransaction& txOut, std::stri
     return DecodeHexTx(txOut, ret["hex"].get<std::string>());
 }
 
-static bool fillTxInputCache(const CTransaction& tx, std::string vins_json)
+static bool fillTxInputCache(const CTransaction& tx, std::vector<UniValue>& vin)
 {
     static const unsigned int nCacheSize = 500000;
 
@@ -135,15 +133,17 @@ static bool fillTxInputCache(const CTransaction& tx, std::string vins_json)
 
 #else
 
-static bool fillTxInputCache(const CTransaction& tx, std::string vins_json)
+static bool fillTxInputCache(const CTransaction& tx, std::vector<UniValue>& vin)
 {
-    //
-    // vins_json : [
+    // vins protocol:
+    // [
     //     {
     //         "txid": "185bd2ae0434088d8d53d7a84617161ff805aa29e590245ab0942aed6792159e",
     //         "vout": 1,
     //         "prevout": {
-    //             "scriptPubKey": "76a914bb0fce03cd20d2e84c511675688ff83da0a3e0d788ac",
+    //             "scriptPubKey": {
+    //                 "hex": "76a914bb0fce03cd20d2e84c511675688ff83da0a3e0d788ac"
+    //             },
     //             "value": 100000000
     //         }
     //     }
@@ -157,19 +157,16 @@ static bool fillTxInputCache(const CTransaction& tx, std::string vins_json)
         view.Flush();
     }
 
-    UniValue vins(UniValue::VARR);
-    vins.read(vins_json);
-    auto vins_arr = vins.getValues();
-    for (auto it = vins_arr.begin(); it != vins_arr.end(); ++it) {
-        const UniValue& vin_obj = *it;
+    for (auto it = vin.begin(); it != vin.end(); ++it) {
+        const UniValue& vin_one = *it;
         Coin newcoin;
-        const COutPoint vin(uint256S(vin_obj["txid"].get_str()), vin_obj["vout"].getInt<uint32_t>());
+        const COutPoint vin(uint256S(vin_one["txid"].get_str()), vin_one["vout"].getInt<uint32_t>());
 
-        auto pks_data = ParseHexUV(vin_obj["prevout"]["scriptPubKey"], "scriptPubKey");
+        auto pks_data = ParseHexUV(vin_one["prevout"]["scriptPubKey"]["hex"], "prevout.scriptPubKey.hex");
         CScript scriptPubKey(pks_data.begin(), pks_data.end());
         newcoin.out.scriptPubKey = scriptPubKey;
 
-        const CAmount nValue(vin_obj["prevout"]["value"].getInt<int64_t>());
+        const CAmount nValue(vin_one["prevout"]["value"].getInt<int64_t>());
         newcoin.out.nValue = nValue;
 
         view.AddCoin(vin, std::move(newcoin), true);
@@ -180,7 +177,7 @@ static bool fillTxInputCache(const CTransaction& tx, std::string vins_json)
 
 #endif
 
-int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::string vins_json)
+int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vector<UniValue>& vin)
 {
     unsigned int idx(0);
     unsigned int nTime(0);
@@ -210,7 +207,7 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::str
         LOCK2(cs_main, cs_tx_cache);
 
         // Add previous transaction inputs to the cache
-        if (!fillTxInputCache(wtx, vins_json)) {
+        if (!fillTxInputCache(wtx, vin)) {
             tfm::printfln("%s() ERROR: failed to get inputs for %s\n", __func__, wtx.GetHash().GetHex());
             return -101;
         }
@@ -619,24 +616,50 @@ void Init(std::string host, int port, std::string username, std::string password
     SelectParams("main");
 }
 
-std::string ParseTx(std::string hexTx, int blockHeight, std::string vinsJson)
+std::string ParseTx(std::string inputTx)
 {
+    // inputTx protocol:
+    // {
+    //     "txid": "f0e12c90e28f940900938360e1d1d74b286078b856e621310af186207e02ccb3",
+    //     "height": 81323,
+    //     "hex": "010000000001018ac2da11ca3c50fbc8b3dda80b94e453ae7f680c00",
+    //     "vin": [
+    //         {
+    //             "txid": "185bd2ae0434088d8d53d7a84617161ff805aa29e590245ab0942aed6792159e",
+    //             "vout": 1,
+    //             "prevout": {
+    //                 "scriptPubKey": {
+    //                     "hex": "76a914bb0fce03cd20d2e84c511675688ff83da0a3e0d788ac"
+    //                 },
+    //                 "value": 100000000
+    //             }
+    //         }
+    //     ]
+    // }
+    //
+    UniValue inputTxObj(UniValue::VOBJ);
+    inputTxObj.read(inputTx);
+
+    auto hexTx = inputTxObj["hex"].get_str();
+    auto blockHeight = inputTxObj["height"].getInt<uint32_t>();
+    auto vin = inputTxObj["vin"].getValues();
+
     CMutableTransaction tx;
     if (!DecodeHexTx(tx, hexTx)) {
         tfm::printfln("decode hexTx failed: %s", hexTx);
-        return "";
+        return UniValue(UniValue::VNULL).write();
     }
 
     CMPTransaction mp_obj;
-    int parseRC = parseTx(CTransaction(tx), blockHeight, mp_obj, vinsJson);
+    int parseRC = parseTx(CTransaction(tx), blockHeight, mp_obj, vin);
     if (parseRC < 0) {
         tfm::printfln("parse Tx failed with code: %d", parseRC);
-        return "";
+        return UniValue(UniValue::VNULL).write();
     }
 
     if (!mp_obj.interpret_Transaction()) {
         tfm::printfln("interpret omniTx failed");
-        return "";
+        return UniValue(UniValue::VNULL).write();
     }
 
     UniValue txobj(UniValue::VOBJ);
