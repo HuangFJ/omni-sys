@@ -3,9 +3,7 @@ name = "omni-sys"
 version = "0.1.0"
 edition = "2021"
 authors = ["Jon Huang <biohfj@gmail.com>"]
-exclude = [
-    "omnicore"
-]
+exclude = ["omnicore"]
 description = "rust binding to omnilayer"
 license = "MIT"
 
@@ -26,3 +24,4 @@ autocxx-build = "0.26"
 miette = { version = "5", features = ["fancy"] }
 regex = "1.10"
 glob = "0.3"
+reqwest = { version = "0.11", features = ["blocking"] }
