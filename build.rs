@@ -19,16 +19,7 @@ fn main() -> miette::Result<()> {
     let omnicore = workspace.join("omnicore").join("src");
     let cxx = PathBuf::from("/usr/bin/clang++");
 
-    if !src.join("libomnicore.a").exists() {
-        if let Ok(mut response) = reqwest::blocking::get(format!(
-            "https://github.com/HuangFJ/omni-sys/raw/main/libomnicore.a-{target}?download="
-        )) {
-            response
-                .copy_to(&mut fs::File::create(&src.join("libomnicore.a")).unwrap())
-                .unwrap();
-        }
-    }
-    if !src.join("libomnicore.a").exists() {
+    if !omnicore.join("config").join("bitcoin-config.h").exists() {
         exec!(Command::new("git").args(["submodule", "update", "--init", "--recursive"]));
         exec!(Command::new("./autogen.sh").current_dir(&workspace.join("omnicore")));
         exec!(Command::new("./configure")
@@ -45,6 +36,17 @@ fn main() -> miette::Result<()> {
                 "--without-miniupnpc",
                 "--without-natpmp",
             ]));
+    }
+    if !src.join("libomnicore.a").exists() {
+        if let Ok(mut response) = reqwest::blocking::get(format!(
+            "https://github.com/HuangFJ/omni-sys/raw/main/libomnicore.a-{target}?download="
+        )) {
+            response
+                .copy_to(&mut fs::File::create(&src.join("libomnicore.a")).unwrap())
+                .unwrap();
+        }
+    }
+    if !src.join("libomnicore.a").exists() {
         exec!(Command::new("make")
             .current_dir(&workspace.join("omnicore"))
             .arg("-j8"));
