@@ -72,7 +72,8 @@ LIBS = -lbitcoin_node \
 	-lleveldb \
 	$(LIBCRC32C) \
 	-lmemenv \
-	-lsecp256k1
+	-lsecp256k1 \
+	-lbitcoinconsensus
 
 LIBS_a = $(PWD)/omnicore/src/libbitcoin_node.a \
 	$(PWD)/omnicore/src/libbitcoin_common.a \
@@ -83,7 +84,8 @@ LIBS_a = $(PWD)/omnicore/src/libbitcoin_node.a \
 	$(PWD)/omnicore/src/leveldb/.libs/libleveldb.a \
 	$(LIBCRC32C_a) \
 	$(PWD)/omnicore/src/leveldb/.libs/libmemenv.a \
-	$(PWD)/omnicore/src/secp256k1/.libs/libsecp256k1.a
+	$(PWD)/omnicore/src/secp256k1/.libs/libsecp256k1.a \
+	$(PWD)/omnicore/src/.libs/libbitcoinconsensus.a
 
 # LIBS += -lcpp-httplib
 
