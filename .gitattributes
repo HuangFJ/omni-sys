@@ -1,1 +1,2 @@
 libomnicore.a-x86_64-unknown-linux-gnu filter=lfs diff=lfs merge=lfs -text
+libomnicore.a-aarch64-apple-darwin filter=lfs diff=lfs merge=lfs -text
