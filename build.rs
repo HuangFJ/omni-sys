@@ -114,11 +114,12 @@ fn main() -> miette::Result<()> {
             &omnicore.join("crc32c").join("include"),
         ],
     )
-    .build()?;
+    .extra_clang_args(&["-std=c++17"])
+    .build()
+    .expect("Unable to generate bindings");
 
     build
-        .compiler(cxx)
-        .std("c++17")
+        .flag_if_supported("-std=c++17")
         .define("HAVE_CONFIG_H", None)
         // .define("FETCH_REMOTE_TX", None)
         .file(&src.join("omni.cpp"))

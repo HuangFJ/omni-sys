@@ -5,6 +5,8 @@
 #include <consensus/amount.h>
 #include <core_io.h>
 #include <key_io.h>
+#include <memory>
+#include <new>
 #include <omnicore/dex.h>
 #include <omnicore/mdex.h>
 #include <omnicore/omnicore.h>
@@ -133,22 +135,8 @@ static bool fillTxInputCache(const CTransaction& tx, std::vector<UniValue>& vin)
 
 #else
 
-static bool fillTxInputCache(const CTransaction& tx, std::vector<UniValue>& vin)
+static bool fillTxInputCache(const CTransaction& tx, std::vector<Vin>& vin)
 {
-    // vins protocol:
-    // [
-    //     {
-    //         "txid": "185bd2ae0434088d8d53d7a84617161ff805aa29e590245ab0942aed6792159e",
-    //         "vout": 1,
-    //         "prevout": {
-    //             "scriptPubKey": {
-    //                 "hex": "76a914bb0fce03cd20d2e84c511675688ff83da0a3e0d788ac"
-    //             },
-    //             "value": 100000000
-    //         }
-    //     }
-    // ]
-    //
     static const unsigned int nCacheSize = 500000;
 
     if (view.GetCacheSize() > nCacheSize) {
@@ -158,15 +146,15 @@ static bool fillTxInputCache(const CTransaction& tx, std::vector<UniValue>& vin)
     }
 
     for (auto it = vin.begin(); it != vin.end(); ++it) {
-        const UniValue& vin_one = *it;
+        const Vin& vin_one = *it;
         Coin newcoin;
-        const COutPoint vin(uint256S(vin_one["txid"].get_str()), vin_one["vout"].getInt<uint32_t>());
+        const COutPoint vin(uint256S(vin_one.txid), vin_one.vout);
 
-        auto pks_data = ParseHexUV(vin_one["prevout"]["scriptPubKey"]["hex"], "prevout.scriptPubKey.hex");
+        auto pks_data = ParseHexUV(vin_one.prevout.scriptPubKey.hex, "prevout.scriptPubKey.hex");
         CScript scriptPubKey(pks_data.begin(), pks_data.end());
         newcoin.out.scriptPubKey = scriptPubKey;
 
-        const CAmount nValue(vin_one["prevout"]["value"].getInt<int64_t>());
+        const CAmount nValue(vin_one.prevout.value);
         newcoin.out.nValue = nValue;
 
         view.AddCoin(vin, std::move(newcoin), true);
@@ -177,7 +165,7 @@ static bool fillTxInputCache(const CTransaction& tx, std::vector<UniValue>& vin)
 
 #endif
 
-int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vector<UniValue>& vin)
+int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vector<Vin>& vin)
 {
     unsigned int idx(0);
     unsigned int nTime(0);
@@ -616,63 +604,41 @@ void Init(std::string host, int port, std::string username, std::string password
     SelectParams("main");
 }
 
-std::string ParseTx(std::string inputTx)
+std::unique_ptr<OmniTx> ParseTx(const RawTx& rawTx)
 {
-    // inputTx protocol:
-    // {
-    //     "txid": "f0e12c90e28f940900938360e1d1d74b286078b856e621310af186207e02ccb3",
-    //     "height": 81323,
-    //     "hex": "010000000001018ac2da11ca3c50fbc8b3dda80b94e453ae7f680c00",
-    //     "vin": [
-    //         {
-    //             "txid": "185bd2ae0434088d8d53d7a84617161ff805aa29e590245ab0942aed6792159e",
-    //             "vout": 1,
-    //             "prevout": {
-    //                 "scriptPubKey": {
-    //                     "hex": "76a914bb0fce03cd20d2e84c511675688ff83da0a3e0d788ac"
-    //                 },
-    //                 "value": 100000000
-    //             }
-    //         }
-    //     ]
-    // }
-    //
-    UniValue inputTxObj(UniValue::VOBJ);
-    inputTxObj.read(inputTx);
-
-    auto hexTx = inputTxObj["hex"].get_str();
-    auto blockHeight = inputTxObj["height"].getInt<uint32_t>();
-    auto vin = inputTxObj["vin"].getValues();
+    auto hexTx = rawTx.hex;
+    auto blockHeight = rawTx.height;
+    auto vin = rawTx.vin;
 
     CMutableTransaction tx;
     if (!DecodeHexTx(tx, hexTx)) {
         tfm::printfln("decode hexTx failed: %s", hexTx);
-        return UniValue(UniValue::VNULL).write();
+        return nullptr;
     }
 
     CMPTransaction mp_obj;
     int parseRC = parseTx(CTransaction(tx), blockHeight, mp_obj, vin);
     if (parseRC < 0) {
         tfm::printfln("parse Tx failed with code: %d", parseRC);
-        return UniValue(UniValue::VNULL).write();
+        return nullptr;
     }
 
     if (!mp_obj.interpret_Transaction()) {
         tfm::printfln("interpret omniTx failed");
-        return UniValue(UniValue::VNULL).write();
+        return nullptr;
     }
 
-    UniValue txobj(UniValue::VOBJ);
-    txobj.pushKV("txid", mp_obj.getHash().GetHex());
-    txobj.pushKV("fee", FormatDivisibleMP(mp_obj.getFeePaid()));
-    txobj.pushKV("sendingaddress", TryEncodeOmniAddress(mp_obj.getSender()));
+    auto txOmni = new OmniTx();
+    txOmni->txid = mp_obj.getHash().GetHex();
+    txOmni->fee = FormatDivisibleMP(mp_obj.getFeePaid());
+    txOmni->sendingaddress = TryEncodeOmniAddress(mp_obj.getSender());
+    txOmni->version = mp_obj.getVersion();
+    txOmni->type_int = mp_obj.getType();
+    txOmni->type = mp_obj.getTypeString();
+    txOmni->amount = mp_obj.getNewAmount();
+    txOmni->propertyid = mp_obj.getProperty();
     if (showRefForTx(mp_obj.getType()))
-        txobj.pushKV("referenceaddress", TryEncodeOmniAddress(mp_obj.getReceiver()));
-    txobj.pushKV("version", (uint64_t)mp_obj.getVersion());
-    txobj.pushKV("type_int", (uint64_t)mp_obj.getType());
-    txobj.pushKV("type", mp_obj.getTypeString());
-    txobj.pushKV("amount", mp_obj.getNewAmount());
-    txobj.pushKV("propertyid", mp_obj.getProperty());
+        txOmni->referenceaddress = TryEncodeOmniAddress(mp_obj.getReceiver());
 
-    return txobj.write();
+    return std::unique_ptr<OmniTx>(txOmni);
 }

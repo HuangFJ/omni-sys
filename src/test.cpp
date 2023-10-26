@@ -1,4 +1,5 @@
 #include "omni.h"
+#include "univalue.h"
 #include <tinyformat.h>
 
 int main(int argc, char const* argv[])
@@ -9,11 +10,14 @@ int main(int argc, char const* argv[])
 
     auto ret = ParseTx(rawTx);
     tfm::printfln("%s", ret);
+
+    return 0;
 #else
     Init();
     std::string rawTx = argv[1];
-    auto ret = ParseTx(rawTx);
-    tfm::printfln("%s", ret);
+    tfm::printfln("%s ", rawTx);
+    auto ret = ParseTx(RawTx::loads(rawTx));
+    tfm::printfln("%s ", ret->txid);
 
     return 0;
 #endif
