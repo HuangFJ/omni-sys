@@ -1,6 +1,7 @@
 #pragma once
 
 #include "univalue.h"
+#include <memory>
 #include <string>
 
 struct Vin {
@@ -20,16 +21,14 @@ struct RawTx {
     std::vector<Vin> vin;
     unsigned int height;
 
-    static RawTx loads(std::string rawStr)
+    RawTx(std::string rawStr)
     {
-        RawTx rawTx;
-
         UniValue value(UniValue::VOBJ);
         value.read(rawStr);
 
-        rawTx.txid = value["txid"].get_str();
-        rawTx.hex = value["hex"].get_str();
-        rawTx.height = value["height"].getInt<unsigned int>();
+        this->txid = value["txid"].get_str();
+        this->hex = value["hex"].get_str();
+        this->height = value["height"].getInt<unsigned int>();
 
         for (auto v : value["vin"].getValues()) {
             Vin vin;
@@ -38,9 +37,8 @@ struct RawTx {
             vin.prevout.value = v["prevout"]["value"].getInt<uint64_t>();
             vin.prevout.scriptPubKey.hex = v["prevout"]["scriptPubKey"]["hex"].get_str();
 
-            rawTx.vin.push_back(vin);
+            this->vin.push_back(vin);
         }
-        return rawTx;
     }
 
     std::string dumps()
@@ -85,6 +83,42 @@ struct OmniTx {
     uint64_t amount;
     unsigned int propertyid;
 
+    std::string get_txid()
+    {
+        return txid;
+    }
+    std::string get_fee()
+    {
+        return fee;
+    }
+    std::string get_sendingaddress()
+    {
+        return sendingaddress;
+    }
+    std::string get_referenceaddress()
+    {
+        return referenceaddress;
+    }
+    std::string get_type()
+    {
+        return type;
+    }
+    uint64_t get_amount()
+    {
+        return amount;
+    }
+    unsigned int get_propertyid()
+    {
+        return propertyid;
+    }
+    unsigned short get_version()
+    {
+        return version;
+    }
+    unsigned int get_type_int()
+    {
+        return type_int;
+    }
 
     std::string dumps()
     {
@@ -104,9 +138,4 @@ struct OmniTx {
 };
 
 void Init(std::string host = "127.0.0.1", int port = 8332, std::string username = "", std::string password = "");
-// unique_ptr is smart pointer, it will own the object that it points to.
-// T& is reference, a reference is a type that refers to another object. 
-// It's essentially an alias for an existing object. 
-// Unlike a pointer, a reference cannot be null and must be initialized when declared. 
-// And has no address
 std::unique_ptr<OmniTx> ParseTx(const RawTx& rawTx);

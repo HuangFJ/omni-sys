@@ -1,4 +1,3 @@
-use regex::Regex;
 use std::path::PathBuf;
 use std::process::Command;
 use std::{env, fs};
@@ -17,7 +16,7 @@ fn main() -> miette::Result<()> {
     let workspace = PathBuf::from(&env::var("CARGO_MANIFEST_DIR").unwrap());
     let src = workspace.join("src");
     let omnicore = workspace.join("omnicore").join("src");
-    let cxx = PathBuf::from("/usr/bin/clang++");
+    // let cxx = PathBuf::from("/usr/bin/clang++");
 
     if !omnicore.join("config").join("bitcoin-config.h").exists() {
         exec!(Command::new("git").args(["submodule", "update", "--init", "--recursive"]));

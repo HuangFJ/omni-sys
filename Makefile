@@ -104,12 +104,18 @@ objects:
 # test: objects
 # 	$(CXX) $(DYNAMIC) $(INCLUDE) $(LIBDIR) src/test.o src/omni.o $(LIBS) -o src/test.out
 
-lib: objects
+omnicore/src/config/bitcoin-config.h:
+	cd omnicore && ./autogen.sh
+	cd omnicore && ./configure CXX=clang++ CC=clang --disable-wallet --disable-zmq --disable-bench --disable-tests --disable-fuzz-binary --without-gui --without-miniupnpc --without-natpmp
+
+libomnicore: omnicore/src/config/bitcoin-config.h
 	rm -f src/libomnicore.a
+	make -C omnicore -j8
 	$(AR) src/libomnicore.a $(LIBS_a)
 
-test: lib
+test: objects src/libomnicore.a
 	$(CXX) src/test.o src/omni.o src/libomnicore.a -o src/test.out
+	./src/test.out
 
 clean:
 	rm -rf src/*.o src/*.a src/*.out src/.libs
