@@ -13,6 +13,7 @@ include_cpp! {
 }
 
 pub struct OmniTransaction(pub cxx::UniquePtr<OmniTx>);
+unsafe impl Send for OmniTransaction {}
 
 impl OmniTransaction {
     pub fn txid(&mut self) -> String {
