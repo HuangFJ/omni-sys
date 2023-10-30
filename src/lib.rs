@@ -17,35 +17,35 @@ unsafe impl Send for OmniTransaction {}
 
 impl OmniTransaction {
     pub fn txid(&mut self) -> String {
-        self.0.as_mut().unwrap().get_txid().to_string()
+        self.0.pin_mut().get_txid().to_string()
     }
     pub fn fee(&mut self) -> String {
-        self.0.as_mut().unwrap().get_fee().to_string()
+        self.0.pin_mut().get_fee().to_string()
     }
     pub fn amount(&mut self) -> u64 {
-        self.0.as_mut().unwrap().get_amount()
+        self.0.pin_mut().get_amount()
     }
     pub fn propertyid(&mut self) -> u32 {
-        self.0.as_mut().unwrap().get_propertyid().into()
+        self.0.pin_mut().get_propertyid().into()
     }
     pub fn referenceaddress(&mut self) -> String {
-        self.0.as_mut().unwrap().get_referenceaddress().to_string()
+        self.0.pin_mut().get_referenceaddress().to_string()
     }
     pub fn sendingaddress(&mut self) -> String {
-        self.0.as_mut().unwrap().get_sendingaddress().to_string()
+        self.0.pin_mut().get_sendingaddress().to_string()
     }
     pub fn version(&mut self) -> u16 {
-        self.0.as_mut().unwrap().get_version().into()
+        self.0.pin_mut().get_version().into()
     }
     pub fn type_int(&mut self) -> u32 {
-        self.0.as_mut().unwrap().get_type_int().into()
+        self.0.pin_mut().get_type_int().into()
     }
     pub fn r#type(&mut self) -> String {
-        self.0.as_mut().unwrap().get_type().to_string()
+        self.0.pin_mut().get_type().to_string()
     }
 
     pub fn dumps(&mut self) -> String {
-        self.0.as_mut().unwrap().dumps().to_string()
+        self.0.pin_mut().dumps().to_string()
     }
 }
 
