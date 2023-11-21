@@ -20,37 +20,40 @@ fn main() -> miette::Result<()> {
 
     if !omnicore.join("config").join("bitcoin-config.h").exists() {
         exec!(Command::new("git").args(["submodule", "update", "--init", "--recursive"]));
-        exec!(Command::new("./autogen.sh").current_dir(&workspace.join("omnicore")));
-        exec!(Command::new("./configure")
-            .current_dir(&workspace.join("omnicore"))
-            .args([
-                "CXX=clang++",
-                "CC=clang",
-                "--disable-wallet",
-                "--disable-zmq",
-                "--disable-bench",
-                "--disable-tests",
-                "--disable-fuzz-binary",
-                "--without-gui",
-                "--without-miniupnpc",
-                "--without-natpmp",
-            ]));
+        exec!(Command::new("make").arg("omnicore/src/config/bitcoin-config.h"));
+        // exec!(Command::new("./autogen.sh").current_dir(&workspace.join("omnicore")));
+        // exec!(Command::new("./configure")
+        //     .current_dir(&workspace.join("omnicore"))
+        //     .args([
+        //         "CXX=clang++",
+        //         "CC=clang",
+        //         "--disable-wallet",
+        //         "--disable-zmq",
+        //         "--disable-bench",
+        //         "--disable-tests",
+        //         "--disable-fuzz-binary",
+        //         "--without-gui",
+        //         "--without-miniupnpc",
+        //         "--without-natpmp",
+        //     ]));
     }
     if !src.join("libomnicore.a").exists() {
         if let Ok(mut response) = reqwest::blocking::get(format!(
             "https://github.com/HuangFJ/omni-sys/raw/main/libomnicore.a-{target}?download="
         )) {
-            response
-                .copy_to(&mut fs::File::create(&src.join("libomnicore.a")).unwrap())
-                .unwrap();
+            if response.status().is_success() {
+                response
+                    .copy_to(&mut fs::File::create(&src.join("libomnicore.a")).unwrap())
+                    .unwrap();
+            }
         }
     }
     if !src.join("libomnicore.a").exists() {
-        exec!(Command::new("make")
-            .current_dir(&workspace.join("omnicore"))
-            .arg("-j8"));
-
-        exec!(Command::new("make").arg("lib"));
+        // exec!(Command::new("make")
+        //     .current_dir(&workspace.join("omnicore"))
+        //     .arg("-j8"));
+        exec!(Command::new("cargo").args(["install", "armerge"]));
+        exec!(Command::new("make").arg("libomnicore"));
     }
     // tell dependent crates where to find the native omnicore library
     let mut libs = vec![];
@@ -77,6 +80,7 @@ fn main() -> miette::Result<()> {
                 "crc32c_sse42",
                 "memenv",
                 "secp256k1",
+                "bitcoinconsensus",
             ]
         } else if entry
             .to_string_lossy()
@@ -95,6 +99,7 @@ fn main() -> miette::Result<()> {
                 "crc32c_arm_crc",
                 "memenv",
                 "secp256k1",
+                "bitcoinconsensus",
             ];
         }
     }

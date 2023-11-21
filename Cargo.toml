@@ -1,9 +1,10 @@
 [package]
 name = "omni-sys"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Jon Huang <biohfj@gmail.com>"]
-exclude = ["omnicore"]
+repository = "https://github.com/HuangFJ/omni-sys"
+exclude = ["omnicore", "libomnicore.a-*"]
 description = "rust binding to omnilayer"
 license = "MIT"
 
