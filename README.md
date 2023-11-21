@@ -11,7 +11,7 @@ apt install libevent-dev libboost-dev nlohmann-json3-dev libcpp-httplib-dev
 
 #### MacOS
 ```bash
-brew install automake libtool boost pkg-config libevent nlohmann-json cpp-httplib bear ccache
+brew install automake libtool boost pkg-config libevent nlohmann-json cpp-httplib bear ccache git
 ```
 
 ## Build

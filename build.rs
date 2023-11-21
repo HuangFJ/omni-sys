@@ -19,8 +19,9 @@ fn main() -> miette::Result<()> {
     // let cxx = PathBuf::from("/usr/bin/clang++");
 
     if !omnicore.join("config").join("bitcoin-config.h").exists() {
-        exec!(Command::new("git").args(["submodule", "update", "--init", "--recursive"]));
+        exec!(Command::new("git").args(["clone", "--branch", "develop", "https://github.com/omnilayer/omnicore"]));
         exec!(Command::new("make").arg("omnicore/src/config/bitcoin-config.h"));
+        // exec!(Command::new("git").args(["submodule", "update", "--init", "--recursive"]));
         // exec!(Command::new("./autogen.sh").current_dir(&workspace.join("omnicore")));
         // exec!(Command::new("./configure")
         //     .current_dir(&workspace.join("omnicore"))
