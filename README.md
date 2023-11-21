@@ -6,19 +6,15 @@ Open project in vscode and launch devcontainer.
 # build system
 apt install build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 clang bear ccache git
 # dependency libraries
-apt install libevent-dev libboost-dev nlohmann-json3-dev libcpp-httplib-dev
+apt install libevent-dev libboost-dev
 ```
 
 #### MacOS
 ```bash
-brew install automake libtool boost pkg-config libevent nlohmann-json cpp-httplib bear ccache git
+brew install automake libtool boost pkg-config libevent bear ccache git
 ```
 
 ## Build
-### Config (Optional)
-In `build.rs`, uncomment `-DFETCH_REMOTE_TX` flag to automatically fetch related transactions from remote bitcoin rpc instead of passing from local function for cache when parse a omni tx. if `-DFETCH_REMOTE_TX` is set then pass tx hex, its block height, bitcoin rpc host, port, username and password. otherwise just pass tx hex, its block height and the vins info.
-
-### Build with cargo
 ```bash
 cargo build
 cargo test -- --nocapture

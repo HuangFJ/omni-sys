@@ -8,6 +8,7 @@ struct Vin {
     std::string txid;
     unsigned int vout;
     struct PrevOut {
+        unsigned int height;
         uint64_t value;
         struct ScriptPubKey {
             std::string hex;
@@ -19,7 +20,10 @@ struct RawTx {
     std::string txid;
     std::string hex;
     std::vector<Vin> vin;
+    //block property
     unsigned int height;
+    unsigned int time;
+    unsigned int idx;
 
     RawTx(std::string rawStr)
     {
@@ -29,12 +33,15 @@ struct RawTx {
         this->txid = value["txid"].get_str();
         this->hex = value["hex"].get_str();
         this->height = value["height"].getInt<unsigned int>();
+        this->time = value["time"].getInt<unsigned int>();
+        this->idx = value["idx"].getInt<unsigned int>();
 
         for (auto v : value["vin"].getValues()) {
             Vin vin;
             vin.txid = v["txid"].get_str();
             vin.vout = v["vout"].getInt<unsigned int>();
             vin.prevout.value = v["prevout"]["value"].getInt<uint64_t>();
+            vin.prevout.height = v["prevout"]["height"].getInt<unsigned int>();
             vin.prevout.scriptPubKey.hex = v["prevout"]["scriptPubKey"]["hex"].get_str();
 
             this->vin.push_back(vin);
@@ -47,6 +54,8 @@ struct RawTx {
         value.pushKV("txid", txid);
         value.pushKV("hex", hex);
         value.pushKV("height", height);
+        value.pushKV("time", time);
+        value.pushKV("idx", idx);
 
         UniValue vinValue(UniValue::VARR);
         for (auto v : vin) {
@@ -56,6 +65,7 @@ struct RawTx {
 
             UniValue prevoutValue(UniValue::VOBJ);
             prevoutValue.pushKV("value", v.prevout.value);
+            prevoutValue.pushKV("height", v.prevout.height);
 
             UniValue scriptPubKey(UniValue::VOBJ);
             scriptPubKey.pushKV("hex", v.prevout.scriptPubKey.hex);

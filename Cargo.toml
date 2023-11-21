@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 authors = ["Jon Huang <biohfj@gmail.com>"]
 repository = "https://github.com/HuangFJ/omni-sys"
-exclude = ["omnicore", "libomnicore.a-*", ".*"]
+exclude = ["omnicore", "compile_commands.json", "libomnicore.a-*", ".*"]
 description = "rust binding to omnilayer"
 license = "MIT"
 

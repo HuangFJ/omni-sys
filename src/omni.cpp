@@ -32,6 +32,7 @@
 #include <validation.h>
 #include <vector>
 
+using namespace mastercore;
 
 // Define G_TRANSLATION_FUN symbol in libbitcoinkernel library so users of the
 // library aren't required to export this symbol
@@ -40,111 +41,8 @@ extern const std::function<std::string(const char*)> G_TRANSLATION_FUN = nullptr
 //! Exodus address (changes based on network)
 static std::string exodus_address = "1EXoDusjGwvnjZUyKkxZ4UHEf77z6A5S4P";
 
-static unsigned int nCacheHits = 0;
-static unsigned int nCacheMiss = 0;
-
-using namespace mastercore;
-
-#ifdef FETCH_REMOTE_TX
-
-#include "../jsonrpccxx/client.hpp"
-#include <core_read.cpp>
-#include <httplib.h>
-#include <nlohmann/json.hpp>
-
-class ClientConnector : public jsonrpccxx::IClientConnector
+static bool fillTxInputCache(CCoinsViewCache& view, const std::vector<Vin>& vin)
 {
-public:
-    httplib::Client cli;
-
-    ClientConnector(std::string host, int port, std::string username, std::string password) : cli(host, port)
-    {
-        cli.set_basic_auth(username.c_str(), password.c_str());
-    }
-
-    std::string Send(const std::string& request) override
-    {
-        if (auto res = cli.Post("/", request, "application/json")) {
-            if (res->status == 200) {
-                return res->body;
-            }
-            return tfm::format("{\"error\": \"response code: %s \"}", res->status);
-        } else {
-            return tfm::format("{\"error\": \"unknown error: %s \"}", httplib::to_string(res.error()));
-        }
-    }
-};
-
-static std::unique_ptr<ClientConnector> connector;
-
-bool fetchTransaction(const uint256& hash, CMutableTransaction& txOut, std::string& blockHash)
-{
-    LOCK(cs_main);
-    jsonrpccxx::JsonRpcClient rpcClient(*connector, jsonrpccxx::version::v2);
-
-    nlohmann::json ret;
-    try {
-        ret = rpcClient.CallMethod<nlohmann::json>("1", "getrawtransaction", {hash.GetHex(), 1});
-        blockHash = ret["blockhash"].get<std::string>();
-    } catch (const jsonrpccxx::JsonRpcException& e) {
-        tfm::printfln("JsonRpcException: %s", e.what());
-        return false;
-    }
-
-    return DecodeHexTx(txOut, ret["hex"].get<std::string>());
-}
-
-static bool fillTxInputCache(const CTransaction& tx, std::vector<UniValue>& vin)
-{
-    static const unsigned int nCacheSize = 500000;
-
-    if (view.GetCacheSize() > nCacheSize) {
-        tfm::printfln("%s(): clearing cache before insertion [size=%d, hit=%d, miss=%d]\n",
-                      __func__, view.GetCacheSize(), nCacheHits, nCacheMiss);
-        view.Flush();
-    }
-
-    for (std::vector<CTxIn>::const_iterator it = tx.vin.begin(); it != tx.vin.end(); ++it) {
-        const CTxIn& txIn = *it;
-        unsigned int nOut = txIn.prevout.n;
-        const Coin& coin = view.AccessCoin(txIn.prevout);
-
-        if (!coin.IsSpent()) {
-            ++nCacheHits;
-            continue;
-        } else {
-            ++nCacheMiss;
-        }
-
-        CMutableTransaction txPrev;
-        std::string blockHash;
-        Coin newcoin;
-        std::map<COutPoint, Coin>::const_iterator rm_it;
-        if (fetchTransaction(txIn.prevout.hash, txPrev, blockHash)) {
-            newcoin.out.scriptPubKey = txPrev.vout[nOut].scriptPubKey;
-            newcoin.out.nValue = txPrev.vout[nOut].nValue;
-        } else {
-            return false;
-        }
-
-        view.AddCoin(txIn.prevout, std::move(newcoin), true);
-    }
-
-    return true;
-}
-
-#else
-
-static bool fillTxInputCache(const CTransaction& tx, std::vector<Vin>& vin)
-{
-    static const unsigned int nCacheSize = 500000;
-
-    if (view.GetCacheSize() > nCacheSize) {
-        tfm::printfln("%s(): clearing cache before insertion [size=%d, hit=%d, miss=%d]\n",
-                      __func__, view.GetCacheSize(), nCacheHits, nCacheMiss);
-        view.Flush();
-    }
-
     for (auto it = vin.begin(); it != vin.end(); ++it) {
         const Vin& vin_one = *it;
         Coin newcoin;
@@ -157,127 +55,130 @@ static bool fillTxInputCache(const CTransaction& tx, std::vector<Vin>& vin)
         const CAmount nValue(vin_one.prevout.value);
         newcoin.out.nValue = nValue;
 
+        newcoin.nHeight = vin_one.prevout.height;
+
         view.AddCoin(vin, std::move(newcoin), true);
     }
 
     return true;
 }
 
-#endif
 
-int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vector<Vin>& vin)
+// idx is position within the block, 0-based
+// int msc_tx_push(const CTransaction &wtx, int nBlock, unsigned int idx)
+// INPUT: bRPConly -- set to true to avoid moving funds; to be called from various RPC calls like this
+// RETURNS: 0 if parsed a MP TX
+// RETURNS: < 0 if a non-MP-TX or invalid
+// RETURNS: >0 if 1 or more payments have been made
+static int parseTx(bool bRPConly, CCoinsViewCache& view, const CTransaction& wtx, int nBlock, unsigned int idx, CMPTransaction& mp_tx, unsigned int nTime, const std::vector<Vin>& vin)
 {
-    unsigned int idx(0);
-    unsigned int nTime(0);
-
-    mp_tx.Set(wtx.GetHash(), nBlock, idx, nTime);
+    assert(bRPConly == mp_tx.isRpcOnly());
 
     // ### CLASS IDENTIFICATION AND MARKER CHECK ###
-    int omniClass = mastercore::GetEncodingClass(wtx, nBlock);
-
+    int omniClass = GetEncodingClass(wtx, nBlock);
     if (omniClass == NO_MARKER) {
         return -1; // No Exodus/Omni marker, thus not a valid Omni transaction
     }
 
-    tfm::printfln("____________________________________________________________________________________________________________________________________\n");
-    tfm::printfln("%s block: %d, txid: %s\n", __FUNCTION__, nBlock, wtx.GetHash().GetHex());
+    mp_tx.Set(wtx.GetHash(), nBlock, idx, nTime);
+
+    if (!bRPConly || msc_debug_parser_readonly) {
+        PrintToLog("____________________________________________________________________________________________________________________________________\n");
+        PrintToLog("%s(block=%d, %s idx= %d); txid: %s\n", __func__, nBlock, FormatISO8601DateTime(nTime), idx, wtx.GetHash().GetHex());
+    }
 
     // ### SENDER IDENTIFICATION ###
     std::string strSender;
     int64_t inAll = 0;
 
-    { // needed to ensure the cache isn't cleared in the meantime when doing parallel queries
-        // To avoid potential dead lock warning
-        // cs_main for FillTxInputCache() > GetTransaction()
-        // mempool.cs for FillTxInputCache() > GetTransaction() > mempool.get()
-        // auto mempool = ::ChainstateActive().GetMempool();
-        // assert(mempool);
-        LOCK2(cs_main, cs_tx_cache);
+    bool forceOverride = true;
+    bool isCoinbase = wtx.IsCoinBase();
+    const uint256& txid = wtx.GetHash();
+    for (size_t i = 0; i < wtx.vout.size(); ++i)
+        view.AddCoin(COutPoint(txid, i), Coin(wtx.vout[i], nBlock, isCoinbase), forceOverride);
 
-        // Add previous transaction inputs to the cache
-        if (!fillTxInputCache(wtx, vin)) {
-            tfm::printfln("%s() ERROR: failed to get inputs for %s\n", __func__, wtx.GetHash().GetHex());
-            return -101;
+    // Add previous transaction inputs to the cache
+    if (!fillTxInputCache(view, vin)) {
+        PrintToLog("%s() ERROR: failed to get inputs for %s\n", __func__, wtx.GetHash().GetHex());
+        return -101;
+    }
+
+    assert(view.HaveInputs(wtx));
+
+    if (omniClass != OMNI_CLASS_C) {
+        // OLD LOGIC - collect input amounts and identify sender via "largest input by sum"
+        std::map<std::string, int64_t> inputs_sum_of_values;
+
+        for (unsigned int i = 0; i < wtx.vin.size(); ++i) {
+            if (msc_debug_vin) PrintToLog("vin=%d:%s\n", i, ScriptToAsmStr(wtx.vin[i].scriptSig));
+
+            const CTxIn& txIn = wtx.vin[i];
+            const Coin& coin = view.AccessCoin(txIn.prevout);
+            const CTxOut& txOut = coin.out;
+
+            assert(!txOut.IsNull());
+
+            CTxDestination source;
+            TxoutType whichType;
+            if (!GetOutputType(txOut.scriptPubKey, whichType)) {
+                return -104;
+            }
+            if (!IsAllowedInputType(whichType, nBlock)) {
+                return -105;
+            }
+            if (ExtractDestination(txOut.scriptPubKey, source)) { // extract the destination of the previous transaction's vout[n] and check it's allowed type
+                inputs_sum_of_values[EncodeDestination(source)] += txOut.nValue;
+            } else
+                return -106;
         }
 
-        assert(view.HaveInputs(wtx));
-
-        if (omniClass != OMNI_CLASS_C) {
-            // OLD LOGIC - collect input amounts and identify sender via "largest input by sum"
-            std::map<std::string, int64_t> inputs_sum_of_values;
-
-            for (unsigned int i = 0; i < wtx.vin.size(); ++i) {
-                tfm::printfln("vin=%d:%s\n", i, ScriptToAsmStr(wtx.vin[i].scriptSig));
-
-                const CTxIn& txIn = wtx.vin[i];
-                const Coin& coin = view.AccessCoin(txIn.prevout);
-                const CTxOut& txOut = coin.out;
-
-                assert(!txOut.IsNull());
-
-                CTxDestination source;
-                TxoutType whichType;
-                if (!GetOutputType(txOut.scriptPubKey, whichType)) {
-                    return -104;
-                }
-                if (!IsAllowedInputType(whichType, nBlock)) {
-                    return -105;
-                }
-                if (ExtractDestination(txOut.scriptPubKey, source)) { // extract the destination of the previous transaction's vout[n] and check it's allowed type
-                    inputs_sum_of_values[EncodeDestination(source)] += txOut.nValue;
-                } else
-                    return -106;
-            }
-
-            int64_t nMax = 0;
-            for (std::map<std::string, int64_t>::iterator it = inputs_sum_of_values.begin(); it != inputs_sum_of_values.end(); ++it) { // find largest by sum
-                int64_t nTemp = it->second;
-                if (nTemp > nMax) {
-                    strSender = it->first;
-                    tfm::printfln("looking for The Sender: %s , nMax=%lu, nTemp=%d\n", strSender, nMax, nTemp);
-                    nMax = nTemp;
-                }
-            }
-        } else {
-            // NEW LOGIC - the sender is chosen based on the first vin
-
-            // determine the sender, but invalidate transaction, if the input is not accepted
-            {
-                unsigned int vin_n = 0; // the first input
-                tfm::printfln("vin=%d:%s\n", vin_n, ScriptToAsmStr(wtx.vin[vin_n].scriptSig));
-
-                const CTxIn& txIn = wtx.vin[vin_n];
-                const Coin& coin = view.AccessCoin(txIn.prevout);
-                const CTxOut& txOut = coin.out;
-
-                assert(!txOut.IsNull());
-
-                TxoutType whichType;
-                if (!GetOutputType(txOut.scriptPubKey, whichType)) {
-                    return -108;
-                }
-                if (!IsAllowedInputType(whichType, nBlock)) {
-                    return -109;
-                }
-                CTxDestination source;
-                if (ExtractDestination(txOut.scriptPubKey, source)) {
-                    strSender = EncodeDestination(source);
-                } else
-                    return -110;
+        int64_t nMax = 0;
+        for (std::map<std::string, int64_t>::iterator it = inputs_sum_of_values.begin(); it != inputs_sum_of_values.end(); ++it) { // find largest by sum
+            int64_t nTemp = it->second;
+            if (nTemp > nMax) {
+                strSender = it->first;
+                if (msc_debug_exo) PrintToLog("looking for The Sender: %s , nMax=%lu, nTemp=%d\n", strSender, nMax, nTemp);
+                nMax = nTemp;
             }
         }
+    } else {
+        // NEW LOGIC - the sender is chosen based on the first vin
 
-        inAll = view.GetValueIn(wtx);
+        // determine the sender, but invalidate transaction, if the input is not accepted
+        {
+            unsigned int vin_n = 0; // the first input
+            if (msc_debug_vin) PrintToLog("vin=%d:%s\n", vin_n, ScriptToAsmStr(wtx.vin[vin_n].scriptSig));
 
-    } // end of LOCK(cs_tx_cache)
+            const CTxIn& txIn = wtx.vin[vin_n];
+            const Coin& coin = view.AccessCoin(txIn.prevout);
+            const CTxOut& txOut = coin.out;
+
+            assert(!txOut.IsNull());
+
+            TxoutType whichType;
+            if (!GetOutputType(txOut.scriptPubKey, whichType)) {
+                return -108;
+            }
+            if (!IsAllowedInputType(whichType, nBlock)) {
+                return -109;
+            }
+            CTxDestination source;
+            if (ExtractDestination(txOut.scriptPubKey, source)) {
+                strSender = EncodeDestination(source);
+            } else
+                return -110;
+        }
+    }
+
+    inAll = view.GetValueIn(wtx);
 
     int64_t outAll = wtx.GetValueOut();
     int64_t txFee = inAll - outAll; // miner fee
 
     if (!strSender.empty()) {
-        tfm::printfln("The Sender: %s : fee= %s\n", strSender, FormatDivisibleMP(txFee));
+        if (msc_debug_verbose) PrintToLog("The Sender: %s : fee= %s\n", strSender, FormatDivisibleMP(txFee));
     } else {
-        tfm::printfln("The sender is still EMPTY !!! txid: %s\n", wtx.GetHash().GetHex());
+        PrintToLog("The sender is still EMPTY !!! txid: %s\n", wtx.GetHash().GetHex());
         return -5;
     }
 
@@ -306,11 +207,11 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                 address_data.push_back(address);
                 mp_tx.addValidStmAddress(n, address);
                 value_data.push_back(wtx.vout[n].nValue);
-                tfm::printfln("saving address_data #%d: %s:%s\n", n, EncodeDestination(dest), ScriptToAsmStr(wtx.vout[n].scriptPubKey));
+                if (msc_debug_parser_data) PrintToLog("saving address_data #%d: %s:%s\n", n, EncodeDestination(dest), ScriptToAsmStr(wtx.vout[n].scriptPubKey));
             }
         }
     }
-    tfm::printfln(" address_data.size=%lu\n script_data.size=%lu\n value_data.size=%lu\n", address_data.size(), script_data.size(), value_data.size());
+    if (msc_debug_parser_data) PrintToLog(" address_data.size=%lu\n script_data.size=%lu\n value_data.size=%lu\n", address_data.size(), script_data.size(), value_data.size());
 
     // ### CLASS A PARSING ###
     if (omniClass == OMNI_CLASS_A) {
@@ -329,10 +230,10 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                     strDataAddress = address_data[k];                                      // record data address
                     dataAddressSeq = seq;                                                  // record data address seq num for reference matching
                     dataAddressValue = value_data[k];                                      // record data address amount for reference matching
-                    tfm::printfln("Data Address located - data[%d]:%s: %s (%s)\n", k, script_data[k], address_data[k], FormatDivisibleMP(value_data[k]));
+                    if (msc_debug_parser_data) PrintToLog("Data Address located - data[%d]:%s: %s (%s)\n", k, script_data[k], address_data[k], FormatDivisibleMP(value_data[k]));
                 } else {                    // invalidate - Class A cannot be more than one data packet - possible collision, treat as default (BTC payment)
                     strDataAddress.clear(); // empty strScriptData to block further parsing
-                    tfm::printfln("Multiple Data Addresses found (collision?) Class A invalidated, defaulting to BTC payment\n");
+                    if (msc_debug_parser_data) PrintToLog("Multiple Data Addresses found (collision?) Class A invalidated, defaulting to BTC payment\n");
                     break;
                 }
             }
@@ -344,10 +245,10 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                 if ((address_data[k] != strDataAddress) && (address_data[k] != exodus_address) && (expectedRefAddressSeq == seq)) { // found reference address with matching sequence number
                     if (strRefAddress.empty()) {                                                                                    // confirm we have not already located a reference address
                         strRefAddress = address_data[k];                                                                            // set ref address
-                        tfm::printfln("Reference Address located via seqnum - data[%d]:%s: %s (%s)\n", k, script_data[k], address_data[k], FormatDivisibleMP(value_data[k]));
+                        if (msc_debug_parser_data) PrintToLog("Reference Address located via seqnum - data[%d]:%s: %s (%s)\n", k, script_data[k], address_data[k], FormatDivisibleMP(value_data[k]));
                     } else {                   // can't trust sequence numbers to provide reference address, there is a collision with >1 address with expected seqnum
                         strRefAddress.clear(); // blank ref address
-                        tfm::printfln("Reference Address sequence number collision, will fall back to evaluating matching output amounts\n");
+                        if (msc_debug_parser_data) PrintToLog("Reference Address sequence number collision, will fall back to evaluating matching output amounts\n");
                         break;
                     }
                 }
@@ -368,10 +269,10 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                             if (value_data[k] == ExodusValues[exodus_idx]) { // this output matches data address value and exodus address value, choose as ref
                                 if (strRefAddress.empty()) {
                                     strRefAddress = address_data[k];
-                                    tfm::printfln("Reference Address located via matching amounts - data[%d]:%s: %s (%s)\n", k, script_data[k], address_data[k], FormatDivisibleMP(value_data[k]));
+                                    if (msc_debug_parser_data) PrintToLog("Reference Address located via matching amounts - data[%d]:%s: %s (%s)\n", k, script_data[k], address_data[k], FormatDivisibleMP(value_data[k]));
                                 } else {
                                     strRefAddress.clear();
-                                    tfm::printfln("Reference Address collision, multiple potential candidates. Class A invalidated, defaulting to BTC payment\n");
+                                    if (msc_debug_parser_data) PrintToLog("Reference Address collision, multiple potential candidates. Class A invalidated, defaulting to BTC payment\n");
                                     break;
                                 }
                             }
@@ -387,52 +288,54 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
             strDataAddress.clear(); // last validation step, if strRefAddress is empty, blank strDataAddress so we default to BTC payment
         }
         if (!strDataAddress.empty()) { // valid Class A packet almost ready
-            tfm::printfln("valid Class A:from=%s:to=%s:data=%s\n", strSender, strReference, strScriptData);
+            if (msc_debug_parser_data) PrintToLog("valid Class A:from=%s:to=%s:data=%s\n", strSender, strReference, strScriptData);
             packet_size = PACKET_SIZE_CLASS_A;
             memcpy(single_pkt, &ParseHex(strScriptData)[0], packet_size);
         } else {
-            tfm::printfln("!! sender: %s , receiver: %s\n", strSender, strReference);
-            tfm::printfln("!! this may be the BTC payment for an offer !!\n");
+            if ((!bRPConly || msc_debug_parser_readonly) && msc_debug_parser_dex) {
+                PrintToLog("!! sender: %s , receiver: %s\n", strSender, strReference);
+                PrintToLog("!! this may be the BTC payment for an offer !!\n");
+            }
         }
     }
     // ### CLASS B / CLASS C PARSING ###
     if ((omniClass == OMNI_CLASS_B) || (omniClass == OMNI_CLASS_C)) {
-        tfm::printfln("Beginning reference identification\n");
+        if (msc_debug_parser_data) PrintToLog("Beginning reference identification\n");
         bool referenceFound = false;                         // bool to hold whether we've found the reference yet
         bool changeRemoved = false;                          // bool to hold whether we've ignored the first output to sender as change
         unsigned int potentialReferenceOutputs = 0;          // int to hold number of potential reference outputs
         for (unsigned k = 0; k < address_data.size(); ++k) { // how many potential reference outputs do we have, if just one select it right here
             const std::string& addr = address_data[k];
-            tfm::printfln("ref? data[%d]:%s: %s (%s)\n", k, script_data[k], addr, FormatIndivisibleMP(value_data[k]));
+            if (msc_debug_parser_data) PrintToLog("ref? data[%d]:%s: %s (%s)\n", k, script_data[k], addr, FormatIndivisibleMP(value_data[k]));
             if (addr != exodus_address) {
                 ++potentialReferenceOutputs;
                 if (1 == potentialReferenceOutputs) {
                     strReference = addr;
                     referenceFound = true;
-                    tfm::printfln("Single reference potentially id'd as follows: %s \n", strReference);
+                    if (msc_debug_parser_data) PrintToLog("Single reference potentially id'd as follows: %s \n", strReference);
                 } else {                  // as soon as potentialReferenceOutputs > 1 we need to go fishing
                     strReference.clear(); // avoid leaving strReference populated for sanity
                     referenceFound = false;
-                    tfm::printfln("More than one potential reference candidate, blanking strReference, need to go fishing\n");
+                    if (msc_debug_parser_data) PrintToLog("More than one potential reference candidate, blanking strReference, need to go fishing\n");
                 }
             }
         }
         if (!referenceFound) { // do we have a reference now? or do we need to dig deeper
-            tfm::printfln("Reference has not been found yet, going fishing\n");
+            if (msc_debug_parser_data) PrintToLog("Reference has not been found yet, going fishing\n");
             for (unsigned k = 0; k < address_data.size(); ++k) {
                 const std::string& addr = address_data[k];
                 if (addr != exodus_address) { // removed strSender restriction, not to spec
                     if (addr == strSender && !changeRemoved) {
                         changeRemoved = true; // per spec ignore first output to sender as change if multiple possible ref addresses
-                        tfm::printfln("Removed change\n");
+                        if (msc_debug_parser_data) PrintToLog("Removed change\n");
                     } else {
                         strReference = addr; // this may be set several times, but last time will be highest vout
-                        tfm::printfln("Resetting strReference as follows: %s \n ", strReference);
+                        if (msc_debug_parser_data) PrintToLog("Resetting strReference as follows: %s \n ", strReference);
                     }
                 }
             }
         }
-        tfm::printfln("Ending reference identification\nFinal decision on reference identification is: %s\n", strReference);
+        if (msc_debug_parser_data) PrintToLog("Ending reference identification\nFinal decision on reference identification is: %s\n", strReference);
 
         // ### CLASS B SPECIFIC PARSING ###
         if (omniClass == OMNI_CLASS_B) {
@@ -443,17 +346,17 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                 TxoutType whichType;
                 std::vector<CTxDestination> vDest;
                 int nRequired;
-                tfm::printfln("scriptPubKey: %s\n", HexStr(wtx.vout[i].scriptPubKey));
+                if (msc_debug_script) PrintToLog("scriptPubKey: %s\n", HexStr(wtx.vout[i].scriptPubKey));
                 if (!ExtractDestinations(wtx.vout[i].scriptPubKey, whichType, vDest, nRequired)) {
                     continue;
                 }
                 if (whichType == TxoutType::MULTISIG) {
-                    {
-                        tfm::printfln(" >> multisig: ");
+                    if (msc_debug_script) {
+                        PrintToLog(" >> multisig: ");
                         for (const CTxDestination& dest : vDest) {
-                            tfm::printfln("%s ; ", EncodeDestination(dest));
+                            PrintToLog("%s ; ", EncodeDestination(dest));
                         }
-                        tfm::printfln("\n");
+                        PrintToLog("\n");
                     }
                     // ignore first public key, as it should belong to the sender
                     // and it be used to avoid the creation of unspendable dust
@@ -471,7 +374,7 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
             unsigned int nPackets = multisig_script_data.size();
             if (nPackets > MAX_PACKETS) {
                 nPackets = MAX_PACKETS;
-                tfm::printfln("limiting number of packets to %d [extracted=%d]\n", nPackets, multisig_script_data.size());
+                PrintToLog("limiting number of packets to %d [extracted=%d]\n", nPackets, multisig_script_data.size());
             }
 
             // ### PREPARE A FEW VARS ###
@@ -493,15 +396,15 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                 memcpy(&packets[mdata_count], &packet[0], PACKET_SIZE);
                 ++mdata_count;
 
-                {
+                if (msc_debug_parser_data) {
                     CPubKey key(ParseHex(multisig_script_data[k]));
                     std::string strAddress = EncodeDestination(PKHash(key));
-                    tfm::printfln("multisig_data[%d]:%s: %s\n", k, multisig_script_data[k], strAddress);
+                    PrintToLog("multisig_data[%d]:%s: %s\n", k, multisig_script_data[k], strAddress);
                 }
-                {
+                if (msc_debug_parser) {
                     if (!packet.empty()) {
                         std::string strPacket = HexStr(packet.begin(), packet.end());
-                        tfm::printfln("packet #%d: %s\n", mdata_count, strPacket);
+                        PrintToLog("packet #%d: %s\n", mdata_count, strPacket);
                     }
                 }
             }
@@ -510,11 +413,11 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
 
             // ### FINALIZE CLASS B ###
             for (unsigned int m = 0; m < mdata_count; ++m) { // now decode mastercoin packets
-                tfm::printfln("m=%d: %s\n", m, HexStr(packets[m], PACKET_SIZE + packets[m]));
+                if (msc_debug_parser) PrintToLog("m=%d: %s\n", m, HexStr(packets[m], PACKET_SIZE + packets[m]));
 
                 // check to ensure the sequence numbers are sequential and begin with 01 !
                 if (1 + m != packets[m][0]) {
-                    tfm::printfln("Error: non-sequential seqnum ! expected=%d, got=%d\n", 1 + m, packets[m][0]);
+                    if (msc_debug_spec) PrintToLog("Error: non-sequential seqnum ! expected=%d, got=%d\n", 1 + m, packets[m][0]);
                 }
 
                 memcpy(m * (PACKET_SIZE - 1) + single_pkt, 1 + packets[m], PACKET_SIZE - 1); // now ignoring sequence numbers for Class B packets
@@ -554,8 +457,8 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                             // add the data to the rest
                             op_return_script_data.insert(op_return_script_data.end(), vstrPushes.begin(), vstrPushes.end());
 
-                            {
-                                tfm::printfln("Class C transaction detected: %s parsed to %s at vout %d\n", wtx.GetHash().GetHex(), vstrPushes[0], n);
+                            if (msc_debug_parser_data) {
+                                PrintToLog("Class C transaction detected: %s parsed to %s at vout %d\n", wtx.GetHash().GetHex(), vstrPushes[0], n);
                             }
                         }
                     }
@@ -569,7 +472,7 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
                     unsigned int payload_size = vch.size();
                     if (packet_size + payload_size > MAX_PACKETS * PACKET_SIZE) {
                         payload_size = MAX_PACKETS * PACKET_SIZE - packet_size;
-                        tfm::printfln("limiting payload size to %d byte\n", packet_size + payload_size);
+                        PrintToLog("limiting payload size to %d byte\n", packet_size + payload_size);
                     }
                     if (payload_size > 0) {
                         memcpy(single_pkt + packet_size, &vch[0], payload_size);
@@ -584,7 +487,7 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
     }
 
     // ### SET MP TX INFO ###
-    tfm::printfln("single_pkt: %s\n", HexStr(single_pkt, packet_size + single_pkt));
+    if (msc_debug_verbose) PrintToLog("single_pkt: %s\n", HexStr(single_pkt, packet_size + single_pkt));
     mp_tx.Set(strSender, strReference, 0, wtx.GetHash(), nBlock, idx, (unsigned char*)&single_pkt, packet_size, omniClass, (inAll - outAll));
 
     // TODO: the following is a bit awful
@@ -598,33 +501,29 @@ int parseTx(const CTransaction& wtx, int nBlock, CMPTransaction& mp_tx, std::vec
 
 void Init(std::string host, int port, std::string username, std::string password)
 {
-#ifdef FETCH_REMOTE_TX
-    connector = std::unique_ptr<ClientConnector>(new ClientConnector(host, port, username, password));
-#endif
     SelectParams("main");
 }
 
 std::unique_ptr<OmniTx> ParseTx(const RawTx& rawTx)
 {
     auto hexTx = rawTx.hex;
-    auto blockHeight = rawTx.height;
-    auto vin = rawTx.vin;
 
     CMutableTransaction tx;
     if (!DecodeHexTx(tx, hexTx)) {
-        tfm::printfln("decode hexTx failed: %s", hexTx);
+        if (msc_debug_verbose) PrintToLog("decode hexTx failed: %s", hexTx);
         return nullptr;
     }
 
+    CCoinsViewCacheOnly view;
     CMPTransaction mp_obj;
-    int parseRC = parseTx(CTransaction(tx), blockHeight, mp_obj, vin);
+    int parseRC = parseTx(true, view, CTransaction(tx), rawTx.height, rawTx.idx, mp_obj, rawTx.time, rawTx.vin);
     if (parseRC < 0) {
-        tfm::printfln("parse Tx failed with code: %d", parseRC);
+        if (msc_debug_verbose) PrintToLog("parse Tx failed with code: %d", parseRC);
         return nullptr;
     }
 
     if (!mp_obj.interpret_Transaction()) {
-        tfm::printfln("interpret omniTx failed");
+        if (msc_debug_verbose) PrintToLog("interpret omniTx failed");
         return nullptr;
     }
 

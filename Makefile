@@ -12,8 +12,7 @@ endif
 
 AR = armerge -o 
 
-DYNAMIC = -DHAVE_CONFIG_H \
-	# -DFETCH_REMOTE_TX
+DYNAMIC = -DHAVE_CONFIG_H
 
 INCLUDE = -I$(PWD)/omnicore/src \
 	-I$(PWD)/omnicore/src/config \

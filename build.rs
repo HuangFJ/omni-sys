@@ -18,8 +18,11 @@ fn main() -> miette::Result<()> {
     let omnicore = workspace.join("omnicore").join("src");
     // let cxx = PathBuf::from("/usr/bin/clang++");
 
-    if !omnicore.join("config").join("bitcoin-config.h").exists() {
+    if !workspace.join("omnicore").exists() {
         exec!(Command::new("git").args(["clone", "--branch", "develop", "https://github.com/omnilayer/omnicore"]));
+        exec!(Command::new("git").args(["reset", "--hard", "a2c114c9645bbff7e3ae5b10ac3713c6589867c8"]));
+    }
+    if !omnicore.join("config").join("bitcoin-config.h").exists() {
         exec!(Command::new("make").arg("omnicore/src/config/bitcoin-config.h"));
         // exec!(Command::new("git").args(["submodule", "update", "--init", "--recursive"]));
         // exec!(Command::new("./autogen.sh").current_dir(&workspace.join("omnicore")));
@@ -38,17 +41,17 @@ fn main() -> miette::Result<()> {
         //         "--without-natpmp",
         //     ]));
     }
-    if !src.join("libomnicore.a").exists() {
-        if let Ok(mut response) = reqwest::blocking::get(format!(
-            "https://github.com/HuangFJ/omni-sys/raw/main/libomnicore.a-{target}?download="
-        )) {
-            if response.status().is_success() {
-                response
-                    .copy_to(&mut fs::File::create(&src.join("libomnicore.a")).unwrap())
-                    .unwrap();
-            }
-        }
-    }
+    // if !src.join("libomnicore.a").exists() {
+    //     if let Ok(mut response) = reqwest::blocking::get(format!(
+    //         "https://github.com/HuangFJ/omni-sys/raw/main/libomnicore.a-{target}?download="
+    //     )) {
+    //         if response.status().is_success() {
+    //             response
+    //                 .copy_to(&mut fs::File::create(&src.join("libomnicore.a")).unwrap())
+    //                 .unwrap();
+    //         }
+    //     }
+    // }
     if !src.join("libomnicore.a").exists() {
         // exec!(Command::new("make")
         //     .current_dir(&workspace.join("omnicore"))
@@ -126,7 +129,6 @@ fn main() -> miette::Result<()> {
     build
         .flag_if_supported("-std=c++17")
         .define("HAVE_CONFIG_H", None)
-        // .define("FETCH_REMOTE_TX", None)
         .file(&src.join("omni.cpp"))
         .compile("omni_ffi");
 
