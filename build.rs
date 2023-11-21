@@ -1,6 +1,6 @@
+use std::env;
 use std::path::PathBuf;
 use std::process::Command;
-use std::{env, fs};
 
 macro_rules! exec {
     ($($tokens: tt)*) => {
@@ -19,8 +19,17 @@ fn main() -> miette::Result<()> {
     // let cxx = PathBuf::from("/usr/bin/clang++");
 
     if !workspace.join("omnicore").exists() {
-        exec!(Command::new("git").args(["clone", "--branch", "develop", "https://github.com/omnilayer/omnicore"]));
-        exec!(Command::new("git").args(["reset", "--hard", "a2c114c9645bbff7e3ae5b10ac3713c6589867c8"]));
+        exec!(Command::new("git").args([
+            "clone",
+            "--branch",
+            "develop",
+            "https://github.com/omnilayer/omnicore"
+        ]));
+        exec!(Command::new("git").args([
+            "reset",
+            "--hard",
+            "a2c114c9645bbff7e3ae5b10ac3713c6589867c8"
+        ]));
     }
     if !omnicore.join("config").join("bitcoin-config.h").exists() {
         exec!(Command::new("make").arg("omnicore/src/config/bitcoin-config.h"));

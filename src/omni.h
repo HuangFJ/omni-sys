@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chainparamsbase.h"
 #include "univalue.h"
 #include <memory>
 #include <string>
@@ -20,7 +21,7 @@ struct RawTx {
     std::string txid;
     std::string hex;
     std::vector<Vin> vin;
-    //block property
+    // block property
     unsigned int height;
     unsigned int time;
     unsigned int idx;
@@ -147,5 +148,5 @@ struct OmniTx {
     }
 };
 
-void Init(std::string host = "127.0.0.1", int port = 8332, std::string username = "", std::string password = "");
+void Init(std::string chain = CBaseChainParams::MAIN, bool debug = true);
 std::unique_ptr<OmniTx> ParseTx(const RawTx& rawTx);

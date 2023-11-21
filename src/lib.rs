@@ -49,12 +49,28 @@ impl OmniTransaction {
     }
 }
 
-pub fn init_with(host: &str, port: i32, username: &str, password: &str) {
-    ffi::Init(host, c_int(port), username, password);
+#[derive(Default)]
+pub enum Chain {
+    #[default]
+    Main,
+    Test,
+    Signet,
+    Regtest,
 }
 
-pub fn init() {
-    ffi::Init("127.0.0.1", c_int(8332), "", "");
+impl ToString for Chain {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Main => "main".to_string(),
+            Self::Test => "test".to_string(),
+            Self::Signet => "signet".to_string(),
+            Self::Regtest => "regtest".to_string(),
+        }
+    }
+}
+
+pub fn init(chain: Chain, debug: bool) {
+    ffi::Init(chain.to_string(), debug);
 }
 
 pub fn parse_tx(raw_str: &str) -> Result<OmniTransaction> {

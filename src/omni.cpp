@@ -41,6 +41,18 @@ extern const std::function<std::string(const char*)> G_TRANSLATION_FUN = nullptr
 //! Exodus address (changes based on network)
 static std::string exodus_address = "1EXoDusjGwvnjZUyKkxZ4UHEf77z6A5S4P";
 
+
+#include <util/system.cpp>
+void ArgsManager::ForceSetArgs(const std::string& strArg, const std::vector<std::string>& strVector)
+{
+    LOCK(cs_args);
+    UniValue arr = UniValue(UniValue::VARR);
+    for (const std::string& str : strVector) {
+        arr.push_back(str);
+    }
+    m_settings.forced_settings[SettingName(strArg)] = arr;
+}
+
 static bool fillTxInputCache(CCoinsViewCache& view, const std::vector<Vin>& vin)
 {
     for (auto it = vin.begin(); it != vin.end(); ++it) {
@@ -499,9 +511,15 @@ static int parseTx(bool bRPConly, CCoinsViewCache& view, const CTransaction& wtx
     return 0;
 }
 
-void Init(std::string host, int port, std::string username, std::string password)
+// chain: main, test, signet, regtest
+void Init(std::string chain, bool debug)
 {
-    SelectParams("main");
+    if (debug) {
+        gArgs.ForceSetArgs("-omnidebug", std::vector<std::string>{"vin", "parser_data", "parser", "script", "exo", "parser_dex", "spec", "verbose", "parser_readonly"});
+        gArgs.SoftSetBoolArg("-printtoconsole", true);
+        InitDebugLogLevels();
+    }
+    SelectParams(chain);
 }
 
 std::unique_ptr<OmniTx> ParseTx(const RawTx& rawTx)
@@ -539,5 +557,6 @@ std::unique_ptr<OmniTx> ParseTx(const RawTx& rawTx)
     if (showRefForTx(mp_obj.getType()))
         txOmni->referenceaddress = TryEncodeOmniAddress(mp_obj.getReceiver());
 
+    if (msc_debug_verbose) PrintToLog("parse Tx success: %s", txOmni->dumps());
     return std::unique_ptr<OmniTx>(txOmni);
 }

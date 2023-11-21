@@ -19,8 +19,7 @@ INCLUDE = -I$(PWD)/omnicore/src \
 	-I$(PWD)/omnicore/src/leveldb/include \
 	-I$(PWD)/omnicore/src/univalue/include \
 	-I$(PWD)/omnicore/src/secp256k1/include \
-	-I$(PWD)/omnicore/src/crc32c/include \
-	-I$(PWD)/jsonrpccxx
+	-I$(PWD)/omnicore/src/crc32c/include
 
 LIBDIR = -L$(PWD)/omnicore/src \
 	-L$(PWD)/omnicore/src/.libs \
@@ -117,4 +116,5 @@ test: objects src/libomnicore.a
 	./src/test.out
 
 clean:
+	make -C omnicore clean
 	rm -rf src/*.o src/*.a src/*.out src/.libs
