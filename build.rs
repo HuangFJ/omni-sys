@@ -18,18 +18,20 @@ fn main() -> miette::Result<()> {
     let omnicore = workspace.join("omnicore").join("src");
     // let cxx = PathBuf::from("/usr/bin/clang++");
 
-    if !workspace.join("omnicore").exists() {
+    if !omnicore.exists() {
         exec!(Command::new("git").args([
             "clone",
             "--branch",
             "develop",
             "https://github.com/omnilayer/omnicore"
         ]));
-        exec!(Command::new("git").args([
-            "reset",
-            "--hard",
-            "a2c114c9645bbff7e3ae5b10ac3713c6589867c8"
-        ]));
+        exec!(Command::new("git")
+            .current_dir(workspace.join("omnicore"))
+            .args([
+                "reset",
+                "--hard",
+                "9352212e81e29a9d5f0aaf22560ac901e07f7e20"
+            ]));
     }
     if !omnicore.join("config").join("bitcoin-config.h").exists() {
         exec!(Command::new("make").arg("omnicore/src/config/bitcoin-config.h"));

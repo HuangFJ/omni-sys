@@ -6,7 +6,6 @@
 #include <core_io.h>
 #include <key_io.h>
 #include <memory>
-#include <new>
 #include <omnicore/dex.h>
 #include <omnicore/mdex.h>
 #include <omnicore/omnicore.h>
@@ -17,7 +16,6 @@
 #include <omnicore/tally.h>
 #include <omnicore/tx.h>
 #include <omnicore/utilsui.h>
-#include <optional>
 #include <primitives/transaction.h>
 #include <script/script.h>
 #include <script/standard.h>
@@ -26,8 +24,8 @@
 #include <tinyformat.h>
 #include <uint256.h>
 #include <univalue.h>
-#include <unordered_map>
 #include <util/strencodings.h>
+#include <util/system.cpp>
 #include <util/time.h>
 #include <validation.h>
 #include <vector>
@@ -42,7 +40,6 @@ extern const std::function<std::string(const char*)> G_TRANSLATION_FUN = nullptr
 static std::string exodus_address = "1EXoDusjGwvnjZUyKkxZ4UHEf77z6A5S4P";
 
 
-#include <util/system.cpp>
 void ArgsManager::ForceSetArgs(const std::string& strArg, const std::vector<std::string>& strVector)
 {
     LOCK(cs_args);
